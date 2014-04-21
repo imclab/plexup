@@ -10,8 +10,16 @@ import (
 const logging_tag = "plexup"
 const address = ":25010"
 
-func OHai(w http.ResponseWriter, req *http.Request) {
-	io.WriteString(w, "ohai\n")
+var logger syslog.Writer
+
+func PlexOn(w http.ResponseWriter, req *http.Request) {
+	logger.Notice("Turning Plex Media Server on.")
+	io.WriteString(w, "on handler\n")
+}
+
+func PlexOff(w http.ResponseWriter, req *http.Request) {
+	logger.Notice("Turning Plex Media Server off.")
+	io.WriteString(w, "off handler\n")
 }
 
 func main() {
@@ -20,6 +28,7 @@ func main() {
 		log.Fatalln(err)
 	}
 	logger.Notice("Starting at addres: " + address)
-	http.HandleFunc("/", OHai)
+	http.HandleFunc("/on", PlexOn)
+	http.HandleFunc("/off", PlexOff)
 	http.ListenAndServe(address, nil)
 }
