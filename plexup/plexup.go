@@ -16,7 +16,8 @@ var logger syslog.Writer
 
 func PlexOn(w http.ResponseWriter, req *http.Request) {
 	logger.Notice("Turning Plex Media Server on.")
-	err := pms_cmd.Start()
+	pms_cmd.Start()
+	// http://127.0.0.1:32400/library/sections/all/refresh
 	io.WriteString(w, "on handler\n")
 }
 
