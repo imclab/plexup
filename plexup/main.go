@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"log/syslog"
@@ -15,14 +16,24 @@ const logging_tag = "plexup"
 const address = ":25010"
 
 type plexup struct {
-	logger *syslog.Writer
+	logger  *syslog.Writer
+	watcher chan error
 }
 
 func (p *plexup) on(w http.ResponseWriter, req *http.Request) {
-	p.logger.Notice("Turning Plex Media Server on.")
-	exec.Command("/usr/bin/caffeinate", "/Applications/Plex Media Server.app/Contents/MacOS/Plex Media Server").Start()
-	// http://127.0.0.1:32400/library/sections/all/refresh
 	io.WriteString(w, "on handler\n")
+	select {
+	default:
+		io.WriteString(w, "I think pms is already running.\n")
+		return
+	case _ = <-p.watcher:
+		p.logger.Notice("Turning Plex Media Server on.")
+	}
+	cmd := exec.Command("/usr/bin/caffeinate", "/Applications/Plex Media Server.app/Contents/MacOS/Plex Media Server")
+	go func() {
+		p.watcher <- cmd.Run()
+	}()
+	// http://127.0.0.1:32400/library/sections/all/refresh
 }
 
 func (p *plexup) off(w http.ResponseWriter, req *http.Request) {
@@ -34,12 +45,18 @@ func (p *plexup) off(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+	var err error
 	var pms = new(plexup)
-	logger, err := syslog.New(syslog.LOG_USER|syslog.LOG_NOTICE, logging_tag)
+
+	// Initialize control structure.
+	pms.watcher = make(chan error, 1)
+	pms.watcher <- errors.New("Cleared for launch.")
+	pms.logger, err = syslog.New(syslog.LOG_USER|syslog.LOG_NOTICE, logging_tag)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	pms.logger = logger
+
+	// Main screen turn on.
 	pms.logger.Notice("Starting at addres: " + address)
 	http.HandleFunc("/on", pms.on)
 	http.HandleFunc("/off", pms.off)
