@@ -14,6 +14,8 @@ import (
 const logging_tag = "plexup"
 const address = ":25010"
 
+// Idea from gobry: one channel-triggered control gouroutine
+
 type plexup struct {
 	logger   *syslog.Writer
 	finished chan struct{}
@@ -55,6 +57,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	// sleep proxy:
+	// dns-sd -R "plexup" _plexup._tcp. . 25010 pdl=application/plexup
 	// Main screen turn on.
 	pms.logger.Notice("Starting at addres: " + address)
 	http.HandleFunc("/on", pms.on)
