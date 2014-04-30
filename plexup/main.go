@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"syscall"
 )
 
-const logging_tag = "plexup"
-const address = ":25010"
+const loggingTag = "plexup"
+const plexupPort = 25010
 
 // Idea from gobry: one channel-triggered control gouroutine
 
@@ -41,26 +42,40 @@ func (pms *plexup) on(w http.ResponseWriter, req *http.Request) {
 func (pms *plexup) off(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, "off handler\n")
 	pms.logger.Notice("Turning Plex Media Server off.")
-	var gpid, _ = syscall.Getpgid(os.Getpid())
-	var pid = strconv.Itoa(gpid)
-	exec.Command("pkill", "-g", pid, "Plex Media Server").Run()
+	gpid, _ := syscall.Getpgid(os.Getpid())
+	// TODO: avoid calling pkill
+	exec.Command("pkill", "-g", strconv.Itoa(gpid), "Plex Media Server").Run()
+}
+
+func deathRattler(c chan os.Signal, logger *syslog.Writer) {
+	<-c
+	logger.Notice("SIGTERM received - killing all processes in my process group.")
+	// Kill whole process group.
+	syscall.Kill(0, syscall.SIGTERM)
+	os.Exit(1)
 }
 
 func main() {
+	var address = ":" + strconv.Itoa(plexupPort)
 	var err error
 
 	// Initialize control structure.
 	var pms = new(plexup)
 	pms.finished = make(chan struct{}, 1)
 	pms.finished <- struct{}{}
-	if pms.logger, err = syslog.New(syslog.LOG_USER|syslog.LOG_NOTICE, logging_tag); err != nil {
+	if pms.logger, err = syslog.New(syslog.LOG_USER|syslog.LOG_NOTICE, loggingTag); err != nil {
 		log.Fatalln(err)
 	}
 
-	// sleep proxy:
-	// dns-sd -R "plexup" _plexup._tcp. . 25010 pdl=application/plexup
 	// Main screen turn on.
 	pms.logger.Notice("Starting at addres: " + address)
+
+	// Handle signals
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM)
+	go deathRattler(c, pms.logger)
+
+	exec.Command("dns-sd", "-R", "plexup", "_plexup._tcp.", ".", strconv.Itoa(plexupPort), "pdl=application/plexup").Start()
 	http.HandleFunc("/on", pms.on)
 	http.HandleFunc("/off", pms.off)
 	http.ListenAndServe(address, nil)
