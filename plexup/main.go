@@ -32,7 +32,7 @@ func pmsController(c chan bool, logger *syslog.Writer) {
 			default:
 				logger.Notice("...although I think Plex Media Server is already running.")
 			case <-finished:
-				// TODO: mount the right volume
+				exec.Command("/usr/bin/pmset", "relative", "wake", "1").Run()
 				exec.Command("/usr/bin/osascript", "-e", "try", "-e", "mount volume \"smb://yacoob@boxoob/worek\"", "-e", "end try").Run()
 				cmd := exec.Command("/usr/bin/caffeinate", "/Applications/Plex Media Server.app/Contents/MacOS/Plex Media Server")
 				go func() {
