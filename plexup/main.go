@@ -23,22 +23,21 @@ func pmsController(c chan bool, logger *syslog.Writer) {
 	finished := make(chan struct{}, 1)
 	finished <- struct{}{}
 	for {
-		logger.Notice("controller: czekam na desiredState")
 		desiredState := <-c
-		logger.Notice("controller: dostałem nowy desiredState z kanału")
 		switch desiredState {
 		case true:
+			logger.Notice("Turning Plex Media Server on.")
 			select {
 			default:
-				logger.Notice("controller: I think pms is already running")
+				logger.Notice("...although I think Plex Media Server is already running.")
 			case <-finished:
-				logger.Notice("Turning Plex Media Server on.")
 				cmd := exec.Command("/usr/bin/caffeinate", "/Applications/Plex Media Server.app/Contents/MacOS/Plex Media Server")
 				go func() {
 					cmd.Run()
 					finished <- struct{}{}
 				}()
 				// TODO: hit http://127.0.0.1:32400/library/sections/all/refresh
+				logger.Notice("Plex Media Server started.")
 			}
 		case false:
 			logger.Notice("Turning Plex Media Server off.")
@@ -51,6 +50,7 @@ func pmsController(c chan bool, logger *syslog.Writer) {
 
 func (pms *plexup) on(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, "on handler\n")
+	// TODO: actually output something from pmsController to the client
 	pms.running <- true
 }
 
@@ -59,12 +59,21 @@ func (pms *plexup) off(w http.ResponseWriter, req *http.Request) {
 	pms.running <- false
 }
 
+func (pms *plexup) quit(w http.ResponseWriter, req *http.Request) {
+	io.WriteString(w, "bye!\n")
+	quit()
+}
+
+// quit kills whole process group.
+func quit() {
+	syscall.Kill(0, syscall.SIGTERM)
+	os.Exit(1)
+}
+
 func deathRattler(c chan os.Signal, logger *syslog.Writer) {
 	<-c
 	logger.Notice("SIGTERM received - killing all processes in my process group.")
-	// Kill whole process group.
-	syscall.Kill(0, syscall.SIGTERM)
-	os.Exit(1)
+	quit()
 }
 
 func main() {
@@ -89,5 +98,6 @@ func main() {
 	exec.Command("dns-sd", "-R", "plexup", "_plexup._tcp.", ".", strconv.Itoa(plexupPort), "pdl=application/plexup").Start()
 	http.HandleFunc("/on", pms.on)
 	http.HandleFunc("/off", pms.off)
+	http.HandleFunc("/quit", pms.quit)
 	http.ListenAndServe(address, nil)
 }
