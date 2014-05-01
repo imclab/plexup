@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 const loggingTag = "plexup"
@@ -31,19 +32,22 @@ func pmsController(c chan bool, logger *syslog.Writer) {
 			default:
 				logger.Notice("...although I think Plex Media Server is already running.")
 			case <-finished:
+				// TODO: mount the right volume
+				exec.Command("/usr/bin/osascript", "-e", "try", "-e", "mount volume \"smb://yacoob@boxoob/worek\"", "-e", "end try").Run()
 				cmd := exec.Command("/usr/bin/caffeinate", "/Applications/Plex Media Server.app/Contents/MacOS/Plex Media Server")
 				go func() {
 					cmd.Run()
 					finished <- struct{}{}
 				}()
-				// TODO: hit http://127.0.0.1:32400/library/sections/all/refresh
+				time.Sleep(2 * time.Second)
+				http.Get("http://127.0.0.1:32400/library/sections/all/refresh")
 				logger.Notice("Plex Media Server started.")
 			}
 		case false:
 			logger.Notice("Turning Plex Media Server off.")
 			gpid, _ := syscall.Getpgid(os.Getpid())
 			// TODO: avoid calling pkill
-			exec.Command("pkill", "-g", strconv.Itoa(gpid), "Plex Media Server").Run()
+			exec.Command("/usr/bin/pkill", "-g", strconv.Itoa(gpid), "Plex Media Server").Run()
 		}
 	}
 }
@@ -95,7 +99,7 @@ func main() {
 
 	// Main screen turn on.
 	logger.Notice("Starting at addres: " + address)
-	exec.Command("dns-sd", "-R", "plexup", "_plexup._tcp.", ".", strconv.Itoa(plexupPort), "pdl=application/plexup").Start()
+	exec.Command("/usr/bin/dns-sd", "-R", "plexup", "_plexup._tcp.", ".", strconv.Itoa(plexupPort), "pdl=application/plexup").Start()
 	http.HandleFunc("/on", pms.on)
 	http.HandleFunc("/off", pms.off)
 	http.HandleFunc("/quit", pms.quit)
