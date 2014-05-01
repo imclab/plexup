@@ -42,6 +42,13 @@ things click to life.
   should be able to hit the HTTP endpoints even if machine is sleeping - it'll
   wake up on network traffic. `Wake for network access` has to be turned on in
   `System Preferences - Energy Saver`.
+* In theory you need another always-on device on network that acts as Bonjour
+  Sleep Proxy. In practice - I don't (output of `dns-sd -B _sleep-proxy._udp
+  local` remains empty) yet the registration succeeds and whole setup works.
+  I *think* I've read somewhere that OSX itself will sort it out somehow, when
+  there are no available sleep proxies. I can certainly ping my desktop's IP
+  after it goes "to sleep", and it's not the underlying OS network stack that is
+  answering...
 * I had rather poor experience with Plex Media Server (0.9.9.7.429-f80a8d6)
   struggling with machine trying to go to sleep *during* transcoding. You can
   read about the details on [Plex forums](https://forums.plex.tv/index.php/topic/107735-narcolepsy-problems/).
