@@ -13,14 +13,24 @@ import (
 	"time"
 )
 
+// loggingTag is used as a tag for syslog messages.
 const loggingTag = "plexup"
+
+// plexupPort sets the default port plexup will launch HTTP interface on.
 const plexupPort = 25010
 
+// plexup is a control structure used to control PMS. It's a simple way of
+// sharing the control channel between HTTP handlers.
 type plexup struct {
 	running chan bool
 }
 
+// pmsController is a goroutine that starts or stops PMS.
 func pmsController(c chan bool, logger *syslog.Writer) {
+	// finished is a non-buffered channel used for actual PMS control.
+	// Instead of launcing PMS and tracking the pid, I launch a goroutine that
+	// launches PMS and waits for it to finish. Once it does, it sends a dummy
+	// value (struct{}) down this channel.
 	finished := make(chan struct{}, 1)
 	finished <- struct{}{}
 	for {
@@ -29,6 +39,7 @@ func pmsController(c chan bool, logger *syslog.Writer) {
 		case true:
 			logger.Notice("Turning Plex Media Server on.")
 			select {
+			// This branch runs if finished is empty - that is PMS is still running.
 			default:
 				logger.Notice("...although I think Plex Media Server is already running.")
 			case <-finished:
@@ -39,7 +50,9 @@ func pmsController(c chan bool, logger *syslog.Writer) {
 					cmd.Run()
 					finished <- struct{}{}
 				}()
+				// Wait a moment to allow PMS to initialize.
 				time.Sleep(2 * time.Second)
+				// Request a refresh of the library.
 				http.Get("http://127.0.0.1:32400/library/sections/all/refresh")
 				logger.Notice("Plex Media Server started.")
 			}
@@ -74,6 +87,8 @@ func quit() {
 	os.Exit(1)
 }
 
+// deathRatller should run on plexup receiving SIGTERM - it'll try to clean up
+// all launched processes.
 func deathRattler(c chan os.Signal, logger *syslog.Writer) {
 	<-c
 	logger.Notice("SIGTERM received - killing all processes in my process group.")
